@@ -15,8 +15,7 @@ import type {
   ErrorResponse,
 } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const BACKEND_URL = process.env.HUGGINGFACE_BACKEND_URL || "https://huggingface.co/spaces/NoorSahar/todo-backend";
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 /**
  * Custom error class for API errors.
