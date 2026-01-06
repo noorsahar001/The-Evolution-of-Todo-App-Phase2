@@ -58,6 +58,15 @@ export interface UserLogin {
 }
 
 /**
+ * Login response with JWT token.
+ */
+export interface LoginResponse {
+  user: User;
+  access_token: string;
+  token_type: string;
+}
+
+/**
  * API error response format.
  */
 export interface ErrorResponse {

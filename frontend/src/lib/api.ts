@@ -1,7 +1,7 @@
 /**
  * API client for communicating with the backend.
  *
- * Per FR-006: Uses credentials:'include' to send httpOnly cookies with requests.
+ * Uses Authorization header for cross-origin auth (more reliable than cookies).
  * Per FR-022: Handles API errors consistently.
  */
 
@@ -12,10 +12,36 @@ import type {
   TaskUpdate,
   UserCreate,
   UserLogin,
+  LoginResponse,
   ErrorResponse,
 } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+const TOKEN_KEY = "access_token";
+
+/**
+ * Get stored auth token from localStorage.
+ */
+export function getStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+/**
+ * Store auth token in localStorage.
+ */
+export function setStoredToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+/**
+ * Clear stored auth token.
+ */
+export function clearStoredToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 /**
  * Custom error class for API errors.
@@ -32,9 +58,9 @@ export class ApiError extends Error {
 }
 
 /**
- * Fetch wrapper with credentials and error handling.
+ * Fetch wrapper with Authorization header and error handling.
  *
- * Per FR-006: Include credentials for cookie-based auth.
+ * Uses Authorization header for reliable cross-origin auth.
  * Per T056: Transform API errors to user-friendly messages.
  */
 async function fetchApi<T>(
@@ -43,13 +69,22 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
 
+  // Build headers with Authorization token if available
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  // Add Authorization header if token exists
+  const token = getStoredToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(url, {
     ...options,
-    credentials: "include", // Per FR-006: Send cookies
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    credentials: "include", // Keep for cookie fallback
+    headers,
   });
 
   // Handle successful responses
@@ -92,21 +127,30 @@ export async function register(data: UserCreate): Promise<User> {
 }
 
 /**
- * Login user and set auth cookie.
+ * Login user and store auth token.
  * Per US2, FR-004 to FR-006.
  */
 export async function login(data: UserLogin): Promise<User> {
-  return fetchApi<User>("/api/auth/login", {
+  const response = await fetchApi<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(data),
   });
+
+  // Store token for Authorization header use
+  setStoredToken(response.access_token);
+
+  return response.user;
 }
 
 /**
- * Logout user and clear auth cookie.
+ * Logout user and clear auth token.
  * Per FR-007.
  */
 export async function logout(): Promise<void> {
+  // Clear local token first
+  clearStoredToken();
+
+  // Also clear server-side cookie
   await fetchApi<{ message: string }>("/api/auth/logout", {
     method: "POST",
   });
